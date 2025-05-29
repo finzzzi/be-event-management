@@ -64,3 +64,25 @@ export const getEventsByOrganizer = async (req: Request, res: Response, next: Ne
     next(error);
   }
 }
+
+export const getEventById = async (req: Request, res: Response, next: NextFunction) => {
+  const eventId = parseInt(req.params.id);
+
+  try {
+    const event = await prisma.event.findFirst({
+      where: {
+        id: eventId,
+        userId: req.user.id,
+      },
+      include: { category: true },
+    });
+
+    if (!event) {
+      throw res.status(404).json({ message: "Event not found" });
+    }
+
+    res.json(event);
+  } catch (error) {
+    next(error);
+  }
+}
