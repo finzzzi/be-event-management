@@ -86,3 +86,36 @@ export const getEventById = async (req: Request, res: Response, next: NextFuncti
     next(error);
   }
 }
+
+export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
+  const eventId = parseInt(req.params.id);
+
+  try {
+    // Check if event exist or not
+    const existingEvent = await prisma.event.findFirst({
+      where: {
+        id: eventId,
+        userId: req.user.id,
+      },
+    });
+
+    if (!existingEvent) {
+      throw res.status(404).json({ message: "Event not found" });
+    }
+
+    // Updates event based on given field
+    const updatedEvent = await prisma.event.update({
+      where: { id: eventId },
+      data: {
+        ...req.body,
+        startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
+        endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
+        updatedAt: new Date(),
+      },
+    });
+
+    res.json(updatedEvent);
+  } catch (error) {
+    next(error);
+  }
+}
