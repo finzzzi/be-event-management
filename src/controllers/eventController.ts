@@ -119,3 +119,31 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
     next(error);
   }
 }
+
+export const deleteEvent = async (req: Request, res: Response, next: NextFunction) => {
+  const eventId =  parseInt(req.params.id);
+
+  try {
+    // Check if event exist or not
+    const existingEvent = await prisma.event.findFirst({
+      where: {
+        id: eventId,
+        userId: req.user.id,
+      },
+    });
+
+    if (!existingEvent) {
+      throw res.status(404).json({ message: "Event not found" });
+    }
+
+    await prisma.event.delete({
+      where: {
+        id: eventId,
+      }
+    })
+
+    res.status(204).send("Event deleted succesfully!");
+  } catch (error) {
+    next(error);
+  }
+}
