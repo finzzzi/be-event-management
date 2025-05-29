@@ -51,3 +51,16 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
     next(error);
   }
 }
+
+export const getEventsByOrganizer = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const events = await prisma.event.findMany({
+      where: { userId: req.user.id },
+      include: { category: true },
+    });
+
+    res.json(events);
+  } catch (error) {
+    next(error);
+  }
+}
