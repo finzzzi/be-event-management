@@ -3,7 +3,11 @@ import { PrismaClient } from "../generated/prisma";
 
 const prisma = new PrismaClient();
 
-export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
+export const createEvent = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const {
       name,
@@ -43,16 +47,20 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
         location,
         description,
         userId: userId!,
-      }
+      },
     });
 
     res.status(201).json(newEvent);
   } catch (error) {
     next(error);
   }
-}
+};
 
-export const getEventsByOrganizer = async (req: Request, res: Response, next: NextFunction) => {
+export const getEventsByOrganizer = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const events = await prisma.event.findMany({
       where: { userId: req.user.id },
@@ -63,9 +71,13 @@ export const getEventsByOrganizer = async (req: Request, res: Response, next: Ne
   } catch (error) {
     next(error);
   }
-}
+};
 
-export const getEventById = async (req: Request, res: Response, next: NextFunction) => {
+export const getEventById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const eventId = parseInt(req.params.id);
 
   try {
@@ -85,9 +97,13 @@ export const getEventById = async (req: Request, res: Response, next: NextFuncti
   } catch (error) {
     next(error);
   }
-}
+};
 
-export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
+export const updateEvent = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const eventId = parseInt(req.params.id);
 
   try {
@@ -108,7 +124,9 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
       where: { id: eventId },
       data: {
         ...req.body,
-        startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
+        startDate: req.body.startDate
+          ? new Date(req.body.startDate)
+          : undefined,
         endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
         updatedAt: new Date(),
       },
@@ -118,10 +136,14 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
   } catch (error) {
     next(error);
   }
-}
+};
 
-export const deleteEvent = async (req: Request, res: Response, next: NextFunction) => {
-  const eventId =  parseInt(req.params.id);
+export const deleteEvent = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const eventId = parseInt(req.params.id);
 
   try {
     // Check if event exist or not
@@ -139,11 +161,89 @@ export const deleteEvent = async (req: Request, res: Response, next: NextFunctio
     await prisma.event.delete({
       where: {
         id: eventId,
-      }
-    })
+      },
+    });
 
     res.status(204).send("Event deleted succesfully!");
   } catch (error) {
     next(error);
   }
-}
+};
+
+// endpoint untuk sisi customer
+export const getAllEvents = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const limit = parseInt(req.query.limit as string) || 3;
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  try {
+    const events = await prisma.event.findMany({
+      where: {
+        startDate: {
+          gte: new Date(),
+        },
+      },
+      include: {
+        category: {
+          select: {
+            name: true,
+          },
+        },
+        organizer: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        startDate: "asc",
+      },
+      skip: offset,
+      take: limit,
+    });
+
+    res.json(events);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// endpoint untuk sisi customer
+export const getDetailEventById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const eventId = parseInt(req.params.id);
+
+  try {
+    const event = await prisma.event.findFirst({
+      where: {
+        id: eventId,
+      },
+      include: {
+        category: {
+          select: {
+            name: true,
+          },
+        },
+        organizer: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!event) {
+      throw res.status(404).json({ message: "Event not found" });
+    }
+
+    res.json(event);
+  } catch (error) {
+    next(error);
+  }
+};
