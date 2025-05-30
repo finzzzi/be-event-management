@@ -176,8 +176,10 @@ export const getAllEvents = async (
   res: Response,
   next: NextFunction
 ) => {
-  const limit = parseInt(req.query.limit as string) || 3;
-  const offset = parseInt(req.query.offset as string) || 0;
+  // const limit = parseInt(req.query.limit as string) || 3;
+  // const offset = parseInt(req.query.offset as string) || 0;
+  const category = req.query.category as string | undefined;
+  const q = req.query.q as string | undefined;
 
   try {
     const events = await prisma.event.findMany({
@@ -185,6 +187,16 @@ export const getAllEvents = async (
         startDate: {
           gte: new Date(),
         },
+        ...(category ? { category: { name: category } } : {}),
+
+        ...(q
+          ? {
+              name: {
+                contains: q,
+                mode: "insensitive",
+              },
+            }
+          : {}),
       },
       include: {
         category: {
@@ -201,8 +213,8 @@ export const getAllEvents = async (
       orderBy: {
         startDate: "asc",
       },
-      skip: offset,
-      take: limit,
+      // skip: offset,
+      // take: limit,
     });
 
     res.json(events);
@@ -243,6 +255,25 @@ export const getDetailEventById = async (
     }
 
     res.json(event);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// endpoint untuk ambil nama kategori
+export const getAllCategory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const categories = await prisma.category.findMany({
+      select: {
+        name: true,
+      },
+    });
+
+    res.json(categories);
   } catch (error) {
     next(error);
   }
