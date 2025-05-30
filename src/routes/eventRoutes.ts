@@ -9,6 +9,7 @@ import {
   updateEvent,
   getAllEvents,
   getDetailEventById,
+  getAllCategory,
 } from "../controllers/eventController";
 
 const router = Router();
@@ -16,6 +17,7 @@ const router = Router();
 //endpoint sisi customer
 router.get("/all", getAllEvents);
 router.get("/detail/:id", getDetailEventById);
+router.get("/categories", getAllCategory);
 
 // endpoint sisi event organizer
 router.use(authenticate, verifyOrganizer);
