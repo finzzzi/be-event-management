@@ -31,6 +31,9 @@ model User {
   referralCode    ReferralCode?
   referrals       UserReferral[] @relation("ReferredUser")
   referredBy      UserReferral[] @relation("ReferringUser")
+  points          Point[]
+  coupon          Coupon?
+  transactions    Transaction[]
 
   @@map("users")
 }
@@ -60,31 +63,103 @@ model UserReferral {
   @@map("user_referrals")
 }
 
+model Point {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  point     Int
+  expiredAt DateTime?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@map("points")
+}
+
+model Coupon {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @unique
+  nominal   Int
+  expiredAt DateTime
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@map("coupons")
+}
+
+model Voucher {
+  id        Int       @id @default(autoincrement())
+  name      String
+  eventId   Int       @unique
+  nominal   Int
+  quota     Int
+  startDate DateTime
+  endDate   DateTime
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  event     Event     @relation(fields: [eventId], references: [id])
+
+  @@map("vouchers")
+}
+
 model Event {
-  id          Int      @id @default(autoincrement())
-  userId      Int
-  name        String
-  categoryId  Int
-  price       Int
-  quota       Int
-  startDate   DateTime
-  endDate     DateTime
-  location    String
-  description String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  organizer   User     @relation(fields: [userId], references: [id])
-  category    Category @relation(fields: [categoryId], references: [id])
+  id           Int           @id @default(autoincrement())
+  userId       Int
+  name         String
+  categoryId   Int
+  price        Int
+  quota        Int
+  startDate    DateTime
+  endDate      DateTime
+  location     String
+  description  String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  organizer    User          @relation(fields: [userId], references: [id])
+  category     Category      @relation(fields: [categoryId], references: [id])
+  vouchers     Voucher?
+  transactions Transaction[]
 
   @@map("events")
 }
 
 model Category {
   id        Int      @id @default(autoincrement())
-  name      String
+  name      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   Event     Event[]
 
   @@map("categories")
+}
+
+model Transaction {
+  id                  Int               @id @default(autoincrement())
+  userId              Int
+  eventId             Int
+  transactionStatusId Int               @default(1)
+  quantity            Int
+  totalDiscount       Int
+  totalPrice          Int
+  paymentProof        String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  user                User              @relation(fields: [userId], references: [id])
+  event               Event             @relation(fields: [eventId], references: [id])
+  transactionStatus   TransactionStatus @relation(fields: [transactionStatusId], references: [id])
+
+  @@map("transactions")
+}
+
+model TransactionStatus {
+  id           Int           @id @default(autoincrement())
+  name         String        @unique
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+
+  @@map("transaction_status")
 }
