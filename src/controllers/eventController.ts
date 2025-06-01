@@ -217,7 +217,7 @@ export const getAllEvents = async (
       // take: limit,
     });
 
-    res.json(events);
+    res.status(200).json(events);
   } catch (error) {
     next(error);
   }
@@ -254,7 +254,7 @@ export const getDetailEventById = async (
       throw res.status(404).json({ message: "Event not found" });
     }
 
-    res.json(event);
+    res.status(200).json(event);
   } catch (error) {
     next(error);
   }
@@ -273,7 +273,7 @@ export const getAllCategory = async (
       },
     });
 
-    res.json(categories);
+    res.status(200).json(categories);
   } catch (error) {
     next(error);
   }
