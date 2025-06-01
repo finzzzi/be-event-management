@@ -21,10 +21,10 @@ router.use(authenticate);
 router.post("/", initiateTransaction);
 router.get("/:id", getTransactionDetails);
 router.patch("/:id", applyDiscounts);
-router.post("/:id/confirm", confirmTransaction);
+router.patch("/:id/confirm", confirmTransaction);
 
 // upload payment proof
-router.post(
+router.patch(
   "/:id/payment-proof",
   uploadMiddleware,
   handleUploadError,
