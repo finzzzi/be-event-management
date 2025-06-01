@@ -394,6 +394,12 @@ export const confirmTransaction = async (
 
     // start database transaction
     const result = await prisma.$transaction(async (prisma) => {
+      // reduce event quota based on quantity purchased
+      await prisma.event.update({
+        where: { id: transaction.eventId },
+        data: { quota: { decrement: transaction.quantity } },
+      });
+
       // deduct points if used
       if (use_points && points_amount > 0) {
         // get user points ordered by expiration date (closest to expiry first)
