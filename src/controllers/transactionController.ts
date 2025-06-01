@@ -394,14 +394,6 @@ export const confirmTransaction = async (
 
     // start database transaction
     const result = await prisma.$transaction(async (prisma) => {
-      // update transaction status to WaitingForAdminConfirmation (status: 2)
-      const confirmedTransaction = await prisma.transaction.update({
-        where: { id: parseInt(id) },
-        data: {
-          transactionStatusId: 2, // WaitingForAdminConfirmation
-        },
-      });
-
       // deduct points if used
       if (use_points && points_amount > 0) {
         // get user points ordered by expiration date (closest to expiry first)
@@ -446,11 +438,64 @@ export const confirmTransaction = async (
         });
       }
 
-      return confirmedTransaction;
+      return transaction;
     });
 
     res.status(200).json({
       message: "Transaction created successfully. Waiting for payment proof.",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// upload payment proof
+export const uploadPaymentProof = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user.id;
+
+    // check if file was uploaded
+    if (!req.file) {
+      res.status(400).json({ message: "Payment proof file is required" });
+      return;
+    }
+
+    // check if transaction exists and belongs to user (should be in WaitingForPayment status)
+    const transaction = await prisma.transaction.findFirst({
+      where: {
+        id: parseInt(id),
+        userId,
+        transactionStatusId: 1, // WaitingForPayment status
+      },
+    });
+
+    if (!transaction) {
+      res.status(404).json({
+        message: "Transaction not found",
+      });
+      return;
+    }
+
+    // relative path for database storage
+    const relativePath = `\\uploads\\payment-proofs\\${req.file.filename}`;
+
+    // update transaction with payment proof path and change status to WaitingForAdminConfirmation
+    const updatedTransaction = await prisma.transaction.update({
+      where: { id: parseInt(id) },
+      data: {
+        paymentProof: relativePath,
+        transactionStatusId: 2,
+      },
+    });
+
+    res.status(200).json({
+      message:
+        "Payment proof uploaded successfully. Waiting for admin confirmation.",
     });
   } catch (error) {
     next(error);
