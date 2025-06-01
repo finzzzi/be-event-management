@@ -13,9 +13,9 @@ const router = Router();
 router.use(authenticate);
 
 // tnitiate transaction (from event detail page)
-router.post("/initiate", initiateTransaction);
-router.get("/:transactionId", getTransactionDetails);
-router.put("/:transactionId/apply-discounts", applyDiscounts);
-router.post("/:transactionId/confirm", confirmTransaction);
+router.post("/", initiateTransaction);
+router.get("/:id", getTransactionDetails);
+router.patch("/:id", applyDiscounts);
+router.post("/:id/confirm", confirmTransaction);
 
 export default router;

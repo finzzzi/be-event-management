@@ -134,7 +134,7 @@ export const initiateTransaction = async (
     res.status(201).json({
       message: "Transaction initiated successfully",
       data: {
-        transactionId: transaction.id,
+        id: transaction.id,
         event: transaction.event,
         quantity: transaction.quantity,
         basePrice: event.price,
@@ -154,13 +154,13 @@ export const getTransactionDetails = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { transactionId } = req.params;
+    const { id } = req.params;
     const userId = (req as any).user.id;
 
     // get transaction details
     const transaction = await prisma.transaction.findFirst({
       where: {
-        id: parseInt(transactionId),
+        id: parseInt(id),
         userId,
       },
       include: {
@@ -252,14 +252,14 @@ export const applyDiscounts = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { transactionId } = req.params;
+    const { id } = req.params;
     const { use_points, points_amount, use_coupon, use_voucher } = req.body;
     const userId = (req as any).user.id;
 
     // get transaction
     const transaction = await prisma.transaction.findFirst({
       where: {
-        id: parseInt(transactionId),
+        id: parseInt(id),
         userId,
         transactionStatusId: 1, // WaitingForPayment status
       },
@@ -273,9 +273,7 @@ export const applyDiscounts = async (
     });
 
     if (!transaction) {
-      res
-        .status(404)
-        .json({ message: "Transaction not found or already processed" });
+      res.status(404).json({ message: "Transaction not found" });
       return;
     }
 
@@ -331,7 +329,7 @@ export const applyDiscounts = async (
 
     // update transaction
     const updatedTransaction = await prisma.transaction.update({
-      where: { id: parseInt(transactionId) },
+      where: { id: parseInt(id) },
       data: {
         totalDiscount,
         totalPrice: finalPrice,
@@ -367,14 +365,14 @@ export const confirmTransaction = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { transactionId } = req.params;
+    const { id } = req.params;
     const { use_points, points_amount, use_coupon, use_voucher } = req.body;
     const userId = (req as any).user.id;
 
     // get transaction
     const transaction = await prisma.transaction.findFirst({
       where: {
-        id: parseInt(transactionId),
+        id: parseInt(id),
         userId,
         transactionStatusId: 1, // WaitingForPayment status
       },
@@ -389,7 +387,7 @@ export const confirmTransaction = async (
 
     if (!transaction) {
       res.status(404).json({
-        message: "Transaction not found or already processed",
+        message: "Transaction not found",
       });
       return;
     }
@@ -398,7 +396,7 @@ export const confirmTransaction = async (
     const result = await prisma.$transaction(async (prisma) => {
       // update transaction status to WaitingForAdminConfirmation (status: 2)
       const confirmedTransaction = await prisma.transaction.update({
-        where: { id: parseInt(transactionId) },
+        where: { id: parseInt(id) },
         data: {
           transactionStatusId: 2, // WaitingForAdminConfirmation
         },
