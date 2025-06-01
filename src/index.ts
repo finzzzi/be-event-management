@@ -1,6 +1,7 @@
 import express from "express";
 import authRoutes from "./routes/authRoutes";
 import eventRoutes from "./routes/eventRoutes";
+import transactionRoutes from "./routes/transactionRoutes";
 import cors from "cors";
 
 const app = express();
@@ -14,6 +15,7 @@ app.use(express.json());
 // Routes
 app.use("/auth", authRoutes);
 app.use("/events", eventRoutes);
+app.use("/transactions", transactionRoutes);
 
 // Start server
 app.listen(PORT, () => {
