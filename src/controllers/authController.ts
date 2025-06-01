@@ -124,3 +124,17 @@ export const login = async (
     next(error);
   }
 };
+
+export const verify = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    res.json({
+      message: "Token is valid",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
