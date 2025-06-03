@@ -5,10 +5,7 @@ import {
   handleUploadError,
 } from "../middlewares/uploader";
 import {
-  initiateTransaction,
-  getTransactionDetails,
-  applyDiscounts,
-  confirmTransaction,
+  createTransaction,
   uploadPaymentProof,
   getUserTransactions,
 } from "../controllers/transactionController";
@@ -21,11 +18,7 @@ router.use(authenticate);
 // get user's transactions list
 router.get("/user", getUserTransactions);
 
-// initiate transaction (from event detail page)
-router.post("/", initiateTransaction);
-router.get("/:id", getTransactionDetails);
-router.patch("/:id", applyDiscounts);
-router.patch("/:id/confirm", confirmTransaction);
+router.post("/", createTransaction);
 
 // upload payment proof
 router.patch(
