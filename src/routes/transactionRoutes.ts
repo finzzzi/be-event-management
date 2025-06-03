@@ -8,7 +8,10 @@ import {
   createTransaction,
   uploadPaymentProof,
   getUserTransactions,
+  getEOTransactions,
+  getPaymentProof,
 } from "../controllers/transactionController";
+import { verifyOrganizer } from "../middlewares/verifyOrganizer";
 
 const router = Router();
 
@@ -26,6 +29,15 @@ router.patch(
   uploadMiddleware,
   handleUploadError,
   uploadPaymentProof
+);
+
+// EO Side
+router.get("/eo", authenticate, verifyOrganizer, getEOTransactions);
+router.get(
+  "/payment-proof/:id",
+  authenticate,
+  verifyOrganizer,
+  getPaymentProof
 );
 
 export default router;

@@ -361,3 +361,62 @@ export const getUserTransactions = async (
     next(error);
   }
 };
+
+export const getEOTransactions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const eoId = req.user?.id;
+
+    // Get events created by this EO
+    const events = await prisma.event.findMany({
+      where: { userId: eoId },
+      select: { id: true },
+    });
+    const eventIds = events.map((event) => event.id);
+
+    const transactions = await prisma.transaction.findMany({
+      where: { eventId: { in: eventIds } },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        event: true,
+        transactionStatus: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json(transactions);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getPaymentProof = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const transaction = await prisma.transaction.findUnique({
+      where: { id: parseInt(id) },
+      select: { paymentProof: true },
+    });
+
+    if (!transaction) {
+      throw res.status(404).json({ error: "Transaction not found" });
+    }
+
+    res.json({ paymentProof: transaction.paymentProof });
+  } catch (error) {
+    next(error);
+  }
+};
