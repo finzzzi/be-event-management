@@ -119,6 +119,11 @@ export const updateEvent = async (
       throw res.status(404).json({ message: "Event not found" });
     }
 
+    console.log("Incoming update:", {
+      id: eventId,
+      body: req.body,
+    });
+
     // Updates event based on given field
     const updatedEvent = await prisma.event.update({
       where: { id: eventId },
@@ -269,6 +274,7 @@ export const getAllCategory = async (
   try {
     const categories = await prisma.category.findMany({
       select: {
+        id: true,
         name: true,
       },
     });
