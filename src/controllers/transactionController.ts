@@ -507,3 +507,49 @@ export const uploadPaymentProof = async (
     next(error);
   }
 };
+
+// get user's transactions list
+export const getUserTransactions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = (req as any).user.id;
+
+    // get all transactions
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        userId,
+      },
+      include: {
+        event: {
+          select: {
+            id: true,
+            name: true,
+            price: true,
+            location: true,
+            startDate: true,
+            endDate: true,
+          },
+        },
+        transactionStatus: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.status(200).json({
+      message: "User transactions retrieved successfully",
+      data: transactions,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
