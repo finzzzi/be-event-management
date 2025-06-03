@@ -10,12 +10,16 @@ import {
   applyDiscounts,
   confirmTransaction,
   uploadPaymentProof,
+  getUserTransactions,
 } from "../controllers/transactionController";
 
 const router = Router();
 
 // all transaction endpoints require authentication
 router.use(authenticate);
+
+// get user's transactions list
+router.get("/user", getUserTransactions);
 
 // initiate transaction (from event detail page)
 router.post("/", initiateTransaction);
