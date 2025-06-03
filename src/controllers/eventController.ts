@@ -214,6 +214,28 @@ export const getAllEvents = async (
             name: true,
           },
         },
+        vouchers: {
+          where: {
+            startDate: {
+              lte: new Date(),
+            },
+            endDate: {
+              gte: new Date(),
+            },
+            quota: {
+              gt: 0,
+            },
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            name: true,
+            nominal: true,
+            quota: true,
+            startDate: true,
+            endDate: true,
+          },
+        },
       },
       orderBy: {
         startDate: "asc",
@@ -250,6 +272,28 @@ export const getDetailEventById = async (
         organizer: {
           select: {
             name: true,
+          },
+        },
+        vouchers: {
+          where: {
+            startDate: {
+              lte: new Date(),
+            },
+            endDate: {
+              gte: new Date(),
+            },
+            quota: {
+              gt: 0,
+            },
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            name: true,
+            nominal: true,
+            quota: true,
+            startDate: true,
+            endDate: true,
           },
         },
       },

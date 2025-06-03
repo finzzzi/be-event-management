@@ -60,14 +60,21 @@ const getOrderedUserPoints = async (userId: number) => {
   return [...userPointsWithExpiry, ...userPointsNoExpiry];
 };
 
-// initiate transaction (calculate total price)
-export const initiateTransaction = async (
+// create transaction with all data in one request (except payment proof)
+export const createTransaction = async (
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { eventId, quantity } = req.body;
+    const {
+      eventId,
+      quantity,
+      use_points,
+      points_amount,
+      use_coupon,
+      use_voucher,
+    } = req.body;
     const userId = (req as any).user.id;
 
     // validate input
@@ -79,6 +86,9 @@ export const initiateTransaction = async (
     // get event details
     const event = await prisma.event.findUnique({
       where: { id: parseInt(eventId) },
+      include: {
+        vouchers: true,
+      },
     });
 
     if (!event) {
@@ -107,182 +117,12 @@ export const initiateTransaction = async (
       return;
     }
 
-    // calculate total price
-    const totalPrice = event.price * quantity;
-
-    // create temporary transaction (status: 1 = WaitingForPayment)
-    const transaction = await prisma.transaction.create({
-      data: {
-        userId,
-        eventId: parseInt(eventId),
-        quantity,
-        totalDiscount: 0,
-        totalPrice,
-        transactionStatusId: 1, // WaitingForPayment status
-      },
-      include: {
-        event: {
-          select: {
-            name: true,
-            price: true,
-            quota: true,
-          },
-        },
-      },
-    });
-
-    res.status(201).json({
-      message: "Transaction initiated successfully",
-      data: {
-        id: transaction.id,
-        event: transaction.event,
-        quantity: transaction.quantity,
-        basePrice: event.price,
-        totalPrice: transaction.totalPrice,
-        totalDiscount: transaction.totalDiscount,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// get transaction details with user discounts
-export const getTransactionDetails = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const userId = (req as any).user.id;
-
-    // get transaction details
-    const transaction = await prisma.transaction.findFirst({
-      where: {
-        id: parseInt(id),
-        userId,
-      },
-      include: {
-        event: {
-          select: {
-            name: true,
-            price: true,
-            quota: true,
-            vouchers: true,
-          },
-        },
-        transactionStatus: true,
-      },
-    });
-
-    if (!transaction) {
-      res.status(404).json({ message: "Transaction not found" });
-      return;
-    }
-
-    // get user's available points
-    const userPoints = await prisma.point.aggregate({
-      where: getValidPointsCondition(userId),
-      _sum: {
-        point: true,
-      },
-    });
-
-    // get user's available coupon
-    const userCoupon = await prisma.coupon.findFirst({
-      where: getValidCouponCondition(userId),
-    });
-
-    // get event voucher (if available and still valid)
-    let eventVoucher = null;
-    if (
-      transaction.event.vouchers &&
-      isVoucherValid(transaction.event.vouchers)
-    ) {
-      eventVoucher = transaction.event.vouchers;
-    }
-
-    res.status(200).json({
-      success: true,
-      data: {
-        transaction: {
-          id: transaction.id,
-          quantity: transaction.quantity,
-          totalPrice: transaction.totalPrice,
-          totalDiscount: transaction.totalDiscount,
-          status: transaction.transactionStatus.name,
-        },
-        event: transaction.event,
-        availableDiscounts: {
-          points: {
-            available: userPoints._sum.point || 0,
-            maxUsage: Math.min(
-              userPoints._sum.point || 0,
-              transaction.totalPrice
-            ),
-          },
-          coupon: userCoupon
-            ? {
-                id: userCoupon.id,
-                nominal: userCoupon.nominal,
-                expiredAt: userCoupon.expiredAt,
-              }
-            : null,
-          voucher: eventVoucher
-            ? {
-                id: eventVoucher.id,
-                name: eventVoucher.name,
-                nominal: eventVoucher.nominal,
-                quota: eventVoucher.quota,
-              }
-            : null,
-        },
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// apply discounts and recalculate price
-export const applyDiscounts = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const { use_points, points_amount, use_coupon, use_voucher } = req.body;
-    const userId = (req as any).user.id;
-
-    // get transaction
-    const transaction = await prisma.transaction.findFirst({
-      where: {
-        id: parseInt(id),
-        userId,
-        transactionStatusId: 1, // WaitingForPayment status
-      },
-      include: {
-        event: {
-          include: {
-            vouchers: true,
-          },
-        },
-      },
-    });
-
-    if (!transaction) {
-      res.status(404).json({ message: "Transaction not found" });
-      return;
-    }
-
+    // calculate base price and discount
+    const basePrice = event.price * quantity;
     let totalDiscount = 0;
-    const basePrice = transaction.event.price * transaction.quantity;
 
-    // apply points discount
+    // validate and calculate points discount
     if (use_points && points_amount > 0) {
-      // validate available points
       const userPointsTotal = await prisma.point.aggregate({
         where: getValidPointsCondition(userId),
         _sum: { point: true },
@@ -297,9 +137,10 @@ export const applyDiscounts = async (
       totalDiscount += Math.min(points_amount, basePrice);
     }
 
-    // apply coupon discount
+    // validate and calculate coupon discount
+    let userCoupon = null;
     if (use_coupon) {
-      const userCoupon = await prisma.coupon.findFirst({
+      userCoupon = await prisma.coupon.findFirst({
         where: getValidCouponCondition(userId),
       });
 
@@ -311,99 +152,51 @@ export const applyDiscounts = async (
       totalDiscount += userCoupon.nominal;
     }
 
-    // apply voucher discount
-    if (use_voucher && transaction.event.vouchers) {
-      const voucher = transaction.event.vouchers;
-
-      if (isVoucherValid(voucher)) {
-        totalDiscount += voucher.nominal;
-      } else {
+    // validate and calculate voucher discount
+    if (use_voucher && event.vouchers) {
+      if (!isVoucherValid(event.vouchers)) {
         res.status(400).json({ message: "Voucher not available or expired" });
         return;
       }
+
+      totalDiscount += event.vouchers.nominal;
     }
 
     // ensure total discount doesn't exceed base price
     totalDiscount = Math.min(totalDiscount, basePrice);
     const finalPrice = basePrice - totalDiscount;
 
-    // update transaction
-    const updatedTransaction = await prisma.transaction.update({
-      where: { id: parseInt(id) },
-      data: {
-        totalDiscount,
-        totalPrice: finalPrice,
-      },
-      include: {
-        event: true,
-      },
-    });
-
-    res.status(200).json({
-      message: "Discount applied successfully",
-      data: {
-        transactionId: updatedTransaction.id,
-        basePrice,
-        totalDiscount,
-        finalPrice,
-        discountsApplied: {
-          points: use_points ? points_amount : 0,
-          coupon: use_coupon,
-          voucher: use_voucher,
+    // start database transaction to handle all operations atomically
+    const result = await prisma.$transaction(async (prisma) => {
+      // create transaction record (status: 1 = WaitingForPayment)
+      const transaction = await prisma.transaction.create({
+        data: {
+          userId,
+          eventId: parseInt(eventId),
+          quantity,
+          totalDiscount,
+          totalPrice: finalPrice,
+          transactionStatusId: 1,
         },
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// confirm transaction and redirect to payment proof upload
-export const confirmTransaction = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const { use_points, points_amount, use_coupon, use_voucher } = req.body;
-    const userId = (req as any).user.id;
-
-    // get transaction
-    const transaction = await prisma.transaction.findFirst({
-      where: {
-        id: parseInt(id),
-        userId,
-        transactionStatusId: 1, // WaitingForPayment status
-      },
-      include: {
-        event: {
-          include: {
-            vouchers: true,
+        include: {
+          event: {
+            select: {
+              name: true,
+              price: true,
+              quota: true,
+            },
           },
         },
-      },
-    });
-
-    if (!transaction) {
-      res.status(404).json({
-        message: "Transaction not found",
       });
-      return;
-    }
 
-    // start database transaction
-    const result = await prisma.$transaction(async (prisma) => {
-      // reduce event quota based on quantity purchased
+      // reduce event quota
       await prisma.event.update({
-        where: { id: transaction.eventId },
-        data: { quota: { decrement: transaction.quantity } },
+        where: { id: parseInt(eventId) },
+        data: { quota: { decrement: quantity } },
       });
 
       // deduct points if used
       if (use_points && points_amount > 0) {
-        // get user points ordered by expiration date (closest to expiry first)
-        // points with expiredAt null will be used last
         const userPoints = await getOrderedUserPoints(userId);
 
         let remainingPointsToDeduct = points_amount;
@@ -429,17 +222,17 @@ export const confirmTransaction = async (
       }
 
       // mark coupon as used
-      if (use_coupon) {
-        await prisma.coupon.updateMany({
-          where: getValidCouponCondition(userId),
+      if (use_coupon && userCoupon) {
+        await prisma.coupon.update({
+          where: { id: userCoupon.id },
           data: { deletedAt: new Date() },
         });
       }
 
       // reduce voucher quota
-      if (use_voucher && transaction.event.vouchers) {
+      if (use_voucher && event.vouchers) {
         await prisma.voucher.update({
-          where: { id: transaction.event.vouchers.id },
+          where: { id: event.vouchers.id },
           data: { quota: { decrement: 1 } },
         });
       }
@@ -447,8 +240,23 @@ export const confirmTransaction = async (
       return transaction;
     });
 
-    res.status(200).json({
-      message: "Transaction created successfully. Waiting for payment proof.",
+    res.status(201).json({
+      message:
+        "Transaction created successfully. Please upload payment proof to complete the transaction.",
+      data: {
+        transactionId: result.id,
+        event: result.event,
+        quantity: result.quantity,
+        basePrice,
+        totalDiscount,
+        finalPrice,
+        discountsApplied: {
+          points: use_points ? points_amount : 0,
+          coupon: use_coupon,
+          voucher: use_voucher,
+        },
+        nextStep: `Upload payment proof to PATCH /transactions/${result.id}/payment-proof`,
+      },
     });
   } catch (error) {
     next(error);
@@ -502,6 +310,52 @@ export const uploadPaymentProof = async (
     res.status(200).json({
       message:
         "Payment proof uploaded successfully. Waiting for admin confirmation.",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// get user's transactions list
+export const getUserTransactions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = (req as any).user.id;
+
+    // get all transactions
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        userId,
+      },
+      include: {
+        event: {
+          select: {
+            id: true,
+            name: true,
+            price: true,
+            location: true,
+            startDate: true,
+            endDate: true,
+          },
+        },
+        transactionStatus: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.status(200).json({
+      message: "User transactions retrieved successfully",
+      data: transactions,
     });
   } catch (error) {
     next(error);

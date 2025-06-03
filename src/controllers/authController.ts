@@ -12,6 +12,30 @@ if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is not configured in the .env");
 }
 
+// utility functions for points and coupons
+const getValidPointsCondition = (userId: number) => ({
+  userId,
+  OR: [
+    {
+      expiredAt: {
+        gt: new Date(),
+      },
+    },
+    {
+      expiredAt: null,
+    },
+  ],
+  deletedAt: null,
+});
+
+const getValidCouponCondition = (userId: number) => ({
+  userId,
+  expiredAt: {
+    gt: new Date(),
+  },
+  deletedAt: null,
+});
+
 export const register = async (
   req: Request,
   res: Response,
@@ -133,6 +157,70 @@ export const verify = async (
   try {
     res.json({
       message: "Token is valid",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getUserProfile = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = (req as any).user.id;
+
+    // get user data without password, createdAt, updatedAt
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    // get user's referral code
+    const referralCode = await prisma.referralCode.findFirst({
+      where: { userId },
+      select: { code: true },
+    });
+
+    // get total valid points
+    const userPoints = await prisma.point.aggregate({
+      where: getValidPointsCondition(userId),
+      _sum: {
+        point: true,
+      },
+    });
+
+    // get valid coupons
+    const userCoupons = await prisma.coupon.findMany({
+      where: getValidCouponCondition(userId),
+      select: {
+        id: true,
+        nominal: true,
+        expiredAt: true,
+      },
+    });
+
+    res.status(200).json({
+      message: "User profile retrieved successfully",
+      data: {
+        ...user,
+        referralCode: referralCode?.code || null,
+        points: {
+          total: userPoints._sum.point || 0,
+        },
+        coupons: userCoupons,
+      },
     });
   } catch (error) {
     next(error);
