@@ -179,6 +179,9 @@ export const createTransaction = async (
           totalDiscount,
           totalPrice: finalPrice,
           transactionStatusId: 1,
+          usedCouponId: use_coupon && userCoupon ? userCoupon.id : null,
+          usedVoucherId:
+            use_voucher && event.vouchers ? event.vouchers.id : null,
         },
         include: {
           event: {
@@ -238,7 +241,6 @@ export const createTransaction = async (
                 userId,
                 point: -pointsToDeductFromThisRecord,
                 transactionId: transaction.id,
-                originalPointExpiredAt: pointRecord.expiredAt,
                 originalPointId: pointRecord.id,
                 expiredAt: null,
               },
