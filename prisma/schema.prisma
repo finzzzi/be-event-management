@@ -64,43 +64,48 @@ model UserReferral {
 }
 
 model Point {
-  id        Int       @id @default(autoincrement())
-  userId    Int
-  point     Int
-  expiredAt DateTime?
-  deletedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  user      User      @relation(fields: [userId], references: [id])
+  id              Int          @id @default(autoincrement())
+  userId          Int
+  point           Int
+  expiredAt       DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  user            User         @relation(fields: [userId], references: [id])
+  transactionId   Int?
+  transaction     Transaction? @relation("PointsUsedInTransaction", fields: [transactionId], references: [id])
+  originalPointId Int?
 
   @@map("points")
 }
 
 model Coupon {
-  id        Int       @id @default(autoincrement())
-  userId    Int       @unique
-  nominal   Int
-  expiredAt DateTime
-  deletedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  user      User      @relation(fields: [userId], references: [id])
+  id          Int           @id @default(autoincrement())
+  userId      Int           @unique
+  nominal     Int
+  expiredAt   DateTime
+  deletedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  user        User          @relation(fields: [userId], references: [id])
+  Transaction Transaction[]
 
   @@map("coupons")
 }
 
 model Voucher {
-  id        Int       @id @default(autoincrement())
-  name      String
-  eventId   Int       @unique
-  nominal   Int
-  quota     Int
-  startDate DateTime
-  endDate   DateTime
-  deletedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  event     Event     @relation(fields: [eventId], references: [id])
+  id          Int           @id @default(autoincrement())
+  name        String
+  eventId     Int           @unique
+  nominal     Int
+  quota       Int
+  startDate   DateTime
+  endDate     DateTime
+  deletedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  event       Event         @relation(fields: [eventId], references: [id])
+  Transaction Transaction[]
 
   @@map("vouchers")
 }
@@ -150,6 +155,11 @@ model Transaction {
   user                User              @relation(fields: [userId], references: [id])
   event               Event             @relation(fields: [eventId], references: [id])
   transactionStatus   TransactionStatus @relation(fields: [transactionStatusId], references: [id])
+  pointUsageRecords   Point[]           @relation("PointsUsedInTransaction")
+  usedCouponId        Int?
+  coupon              Coupon?           @relation(fields: [usedCouponId], references: [id])
+  usedVoucherId       Int?
+  voucher             Voucher?          @relation(fields: [usedVoucherId], references: [id])
 
   @@map("transactions")
 }

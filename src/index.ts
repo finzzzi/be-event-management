@@ -3,6 +3,8 @@ import authRoutes from "./routes/authRoutes";
 import eventRoutes from "./routes/eventRoutes";
 import transactionRoutes from "./routes/transactionRoutes";
 import cors from "cors";
+import "./schedulers/transactionScheduler";
+import "./schedulers/expiryScheduler";
 
 const app = express();
 const PORT = process.env.PORT || 8000;
