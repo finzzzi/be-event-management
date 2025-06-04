@@ -78,35 +78,65 @@ export const register = async (
       newReferralCode = nanoid(6);
     }
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-      },
-    });
-
-    // Create referral code for the new user
-    await prisma.referralCode.create({
-      data: {
-        userId: user.id,
-        code: newReferralCode,
-      },
-    });
-
-    // If user was referred by someone, create user referral record
-    if (referrerUser) {
-      await prisma.userReferral.create({
+    // Use database transaction for referral rewards
+    const result = await prisma.$transaction(async (prisma) => {
+      // Create user
+      const user = await prisma.user.create({
         data: {
-          userId: user.id, // User yang direferensikan (new user)
-          referralId: referrerUser.id, // User yang mereferensikan
+          name,
+          email,
+          password: hashedPassword,
         },
       });
-    }
+
+      // Create referral code for the new user
+      await prisma.referralCode.create({
+        data: {
+          userId: user.id,
+          code: newReferralCode,
+        },
+      });
+
+      // If user was referred by someone, create user referral record and give rewards
+      if (referrerUser) {
+        await prisma.userReferral.create({
+          data: {
+            userId: user.id, // User yang direferensikan (new user)
+            referralId: referrerUser.id, // User yang mereferensikan
+          },
+        });
+
+        // REFERRAL REWARDS:
+        // 1. Give 10,000 coupon to new user (valid for 3 months)
+        const couponExpiry = new Date();
+        couponExpiry.setMonth(couponExpiry.getMonth() + 3);
+
+        await prisma.coupon.create({
+          data: {
+            userId: user.id,
+            nominal: 10000,
+            expiredAt: couponExpiry,
+          },
+        });
+
+        // 2. Give 10,000 points to referring user (expired in 3 months)
+        const pointsExpiry = new Date();
+        pointsExpiry.setMonth(pointsExpiry.getMonth() + 3);
+
+        await prisma.point.create({
+          data: {
+            userId: referrerUser.id,
+            point: 10000,
+            expiredAt: pointsExpiry,
+          },
+        });
+      }
+
+      return user;
+    });
 
     // Generate token
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
+    const token = jwt.sign({ userId: result.id }, JWT_SECRET, {
       expiresIn: "1h",
     });
 
