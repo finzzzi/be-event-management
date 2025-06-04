@@ -42,6 +42,7 @@ const getOrderedUserPoints = async (userId: number) => {
   const userPointsWithExpiry = await prisma.point.findMany({
     where: {
       userId,
+      point: { gt: 0 }, // Only fetch positive points
       expiredAt: { gt: new Date() },
       deletedAt: null,
     },
@@ -51,6 +52,7 @@ const getOrderedUserPoints = async (userId: number) => {
   const userPointsNoExpiry = await prisma.point.findMany({
     where: {
       userId,
+      point: { gt: 0 }, // Only fetch positive points
       expiredAt: null,
       deletedAt: null,
     },
@@ -197,27 +199,58 @@ export const createTransaction = async (
 
       // deduct points if used
       if (use_points && points_amount > 0) {
-        const userPoints = await getOrderedUserPoints(userId);
+        const userAvailablePositivePoints = await getOrderedUserPoints(userId);
 
         let remainingPointsToDeduct = points_amount;
-        for (const pointRecord of userPoints) {
+        for (const pointRecord of userAvailablePositivePoints) {
           if (remainingPointsToDeduct <= 0) break;
 
-          if (pointRecord.point <= remainingPointsToDeduct) {
-            // delete this point record completely
-            await prisma.point.update({
-              where: { id: pointRecord.id },
-              data: { deletedAt: new Date() },
-            });
-            remainingPointsToDeduct -= pointRecord.point;
-          } else {
-            // reduce points in this record
-            await prisma.point.update({
-              where: { id: pointRecord.id },
-              data: { point: pointRecord.point - remainingPointsToDeduct },
-            });
-            remainingPointsToDeduct = 0;
+          // calculate how much of this specific pointRecord has already been used
+          const sumOfPreviousUsages = await prisma.point.aggregate({
+            where: {
+              originalPointId: pointRecord.id, // link to the specific source record
+              point: { lt: 0 },
+              deletedAt: null,
+            },
+            _sum: {
+              point: true,
+            },
+          });
+          // access _sum.point, defaulting to 0 if null/undefined
+          const totalUsedFromThisRecord = Math.abs(
+            sumOfPreviousUsages._sum?.point || 0
+          );
+          const currentBalanceOfThisRecord =
+            pointRecord.point - totalUsedFromThisRecord;
+
+          if (currentBalanceOfThisRecord <= 0) {
+            continue; // this source point record is already fully depleted
           }
+
+          const pointsToDeductFromThisRecord = Math.min(
+            currentBalanceOfThisRecord,
+            remainingPointsToDeduct
+          );
+
+          if (pointsToDeductFromThisRecord > 0) {
+            await prisma.point.create({
+              data: {
+                userId,
+                point: -pointsToDeductFromThisRecord,
+                transactionId: transaction.id,
+                originalPointExpiredAt: pointRecord.expiredAt,
+                originalPointId: pointRecord.id,
+                expiredAt: null,
+              },
+            });
+            remainingPointsToDeduct -= pointsToDeductFromThisRecord;
+          }
+        }
+
+        if (remainingPointsToDeduct > 0) {
+          throw new Error(
+            `Failed to deduct the full points_amount. Remaining points to deduct: ${remainingPointsToDeduct}.`
+          );
         }
       }
 
