@@ -396,3 +396,116 @@ export const getUserTransactions = async (
     next(error);
   }
 };
+
+export const createReview = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { eventId, rating, comment, transactionId } = req.body;
+    const userId = (req as any).user.id;
+
+    if (!transactionId) {
+      res.status(400).json({ message: "Transaction ID is required" });
+      return;
+    }
+
+    // check if event exists
+    const event = await prisma.event.findUnique({
+      where: { id: parseInt(eventId) },
+    });
+
+    if (!event) {
+      res.status(404).json({ message: "Event not found" });
+      return;
+    }
+
+    // check if the event has passed
+    if (event.endDate >= new Date()) {
+      res
+        .status(400)
+        .json({ message: "You can only review events that have passed" });
+      return;
+    }
+
+    // fetch and validate the specific transaction
+    const transactionToReview = await prisma.transaction.findUnique({
+      where: { id: parseInt(transactionId) },
+    });
+
+    if (!transactionToReview) {
+      res.status(404).json({ message: "Transaction not found" });
+      return;
+    }
+
+    if (transactionToReview.userId !== userId) {
+      res
+        .status(403)
+        .json({ message: "This transaction does not belong to you" });
+      return;
+    }
+
+    if (transactionToReview.eventId !== parseInt(eventId)) {
+      res.status(400).json({
+        message: "This transaction does not match the provided event",
+      });
+      return;
+    }
+
+    if (transactionToReview.transactionStatusId !== 3) {
+      res
+        .status(403)
+        .json({ message: "You can only review completed transactions" });
+      return;
+    }
+
+    // check if this specific transaction has already been reviewed
+    const existingReview = await prisma.eventReview.findUnique({
+      where: { transactionId: parseInt(transactionId) },
+    });
+
+    if (existingReview) {
+      res
+        .status(400)
+        .json({ message: "This transaction has already been reviewed" });
+      return;
+    }
+
+    // create review
+    const review = await prisma.eventReview.create({
+      data: {
+        eventId: parseInt(eventId),
+        userId,
+        rating,
+        comment,
+        transactionId: parseInt(transactionId),
+      },
+    });
+
+    res
+      .status(201)
+      .json({ message: "Review created successfully", data: review });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getReviewsByTransactionId = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const transactionId = req.query.transactionId as string;
+    const reviews = await prisma.eventReview.findUnique({
+      where: { transactionId: parseInt(transactionId) },
+    });
+
+    res
+      .status(200)
+      .json({ message: "Reviews retrieved successfully", data: reviews });
+  } catch (error) {
+    next(error);
+  }
+};

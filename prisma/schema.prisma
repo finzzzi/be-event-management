@@ -34,6 +34,7 @@ model User {
   points          Point[]
   coupon          Coupon?
   transactions    Transaction[]
+  reviews         EventReview[]
 
   @@map("users")
 }
@@ -127,6 +128,7 @@ model Event {
   category     Category      @relation(fields: [categoryId], references: [id])
   vouchers     Voucher?
   transactions Transaction[]
+  reviews      EventReview[]
 
   @@map("events")
 }
@@ -160,6 +162,7 @@ model Transaction {
   coupon              Coupon?           @relation(fields: [usedCouponId], references: [id])
   usedVoucherId       Int?
   voucher             Voucher?          @relation(fields: [usedVoucherId], references: [id])
+  eventReviews        EventReview[]
 
   @@map("transactions")
 }
@@ -172,4 +175,21 @@ model TransactionStatus {
   transactions Transaction[]
 
   @@map("transaction_status")
+}
+
+model EventReview {
+  id            Int         @id @default(autoincrement())
+  userId        Int
+  eventId       Int
+  rating        Int
+  comment       String?
+  transactionId Int
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  user          User        @relation(fields: [userId], references: [id])
+  event         Event       @relation(fields: [eventId], references: [id])
+
+  @@unique([transactionId])
+  @@map("event_reviews")
 }
