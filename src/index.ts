@@ -2,6 +2,7 @@ import express from "express";
 import authRoutes from "./routes/authRoutes";
 import eventRoutes from "./routes/eventRoutes";
 import transactionRoutes from "./routes/transactionRoutes";
+import voucherRoutes from "./routes/voucherRoutes";
 import cors from "cors";
 import path from "path";
 
@@ -19,6 +20,7 @@ app.use("/events", eventRoutes);
 app.use("/transactions", transactionRoutes);
 const uploadsPath = path.join(__dirname, "../uploads");
 app.use("/uploads", express.static(uploadsPath));
+app.use("/vouchers", voucherRoutes);
 
 // Start server
 app.listen(PORT, () => {
