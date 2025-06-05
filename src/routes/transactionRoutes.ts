@@ -10,6 +10,8 @@ import {
   getUserTransactions,
   getEOTransactions,
   getPaymentProof,
+  acceptTransaction,
+  rejectTransaction,
 } from "../controllers/transactionController";
 import { verifyOrganizer } from "../middlewares/verifyOrganizer";
 
@@ -32,12 +34,11 @@ router.patch(
 );
 
 // EO Side
-router.get("/eo", authenticate, verifyOrganizer, getEOTransactions);
-router.get(
-  "/payment-proof/:id",
-  authenticate,
-  verifyOrganizer,
-  getPaymentProof
-);
+router.use(authenticate, verifyOrganizer);
+
+router.get("/eo", getEOTransactions);
+router.get("/payment-proof/:id", getPaymentProof);
+router.patch("/:id/accept", acceptTransaction);
+router.patch("/:id/reject", rejectTransaction);
 
 export default router;

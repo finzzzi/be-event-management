@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { PrismaClient } from "../generated/prisma";
+import { sendTransactionEmail } from "../utils/emailService";
 
 const prisma = new PrismaClient();
 
@@ -177,6 +178,8 @@ export const createTransaction = async (
           totalDiscount,
           totalPrice: finalPrice,
           transactionStatusId: 1,
+          couponId: use_coupon && userCoupon ? userCoupon.id : null,
+          voucherId: use_voucher && event.vouchers ? event.vouchers.id : null,
         },
         include: {
           event: {
@@ -416,6 +419,151 @@ export const getPaymentProof = async (
     }
 
     res.json({ paymentProof: transaction.paymentProof });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const acceptTransaction = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const eoId = req.user?.id;
+
+    // Get transaction with user and event data
+    const transaction = await prisma.transaction.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        user: true,
+        event: true,
+      },
+    });
+
+    if (!transaction) {
+      res.status(404).json({ error: "Transaction not found" });
+      return;
+    }
+
+    // Check if event belongs to this EO
+    const event = await prisma.event.findFirst({
+      where: { id: transaction.eventId, userId: eoId },
+    });
+
+    if (!event) {
+      res.status(403).json({ error: "Unauthorized for this event" });
+      return;
+    }
+
+    // Update transaction status
+    const updatedTransaction = await prisma.transaction.update({
+      where: { id: parseInt(id) },
+      data: { transactionStatusId: 3 }, // Accepted
+    });
+
+    // Send notification email
+    await sendTransactionEmail(
+      transaction.user.email,
+      transaction.event.name,
+      "accepted"
+    );
+
+    res.json({
+      message: "Transaction accepted",
+      transaction: updatedTransaction,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const rejectTransaction = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const eoId = req.user?.id;
+
+    // Get transaction with user and event data
+    const transaction = await prisma.transaction.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        user: true,
+        event: true,
+        coupon: true,
+        voucher: true,
+      },
+    });
+
+    if (!transaction) {
+      res.status(404).json({ error: "Transaction not found" });
+      return;
+    }
+
+    // Check if event belongs to this EO
+    const event = await prisma.event.findFirst({
+      where: { id: transaction.eventId, userId: eoId },
+    });
+
+    if (!event) {
+      res.status(403).json({ error: "Unauthorized for this event" });
+      return;
+    }
+
+    // Start transaction to handle all operations atomically
+    await prisma.$transaction(async (prisma) => {
+      // Update transaction status
+      await prisma.transaction.update({
+        where: { id: parseInt(id) },
+        data: { transactionStatusId: 4 }, // Rejected
+      });
+
+      // Restore event quota
+      await prisma.event.update({
+        where: { id: transaction.eventId },
+        data: { quota: { increment: transaction.quantity } },
+      });
+
+      // Restore points if used
+      if (transaction.totalDiscount > 0) {
+        await prisma.point.create({
+          data: {
+            userId: transaction.userId,
+            point: transaction.totalDiscount,
+            expiredAt: new Date(new Date().setMonth(new Date().getMonth() + 3)),
+          },
+        });
+      }
+
+      // Restore coupon if used
+      if (transaction.coupon) {
+        await prisma.coupon.update({
+          where: { id: transaction.coupon.id },
+          data: { deletedAt: null },
+        });
+      }
+
+      // Restore voucher quota if used
+      if (transaction.voucher) {
+        await prisma.voucher.update({
+          where: { id: transaction.voucher.id },
+          data: { quota: { increment: 1 } },
+        });
+      }
+    });
+
+    // Send notification email
+    await sendTransactionEmail(
+      transaction.user.email,
+      transaction.event.name,
+      "rejected"
+    );
+
+    res.json({ message: "Transaction rejected and resources restored" });
   } catch (error) {
     next(error);
   }
