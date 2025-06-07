@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { PrismaClient, Transaction, Prisma } from "../generated/prisma"; // Sesuaikan path jika direktori generated Anda berbeda
+import { PrismaClient, Transaction, Prisma } from "../generated/prisma";
 
 const prisma = new PrismaClient();
 
