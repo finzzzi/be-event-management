@@ -405,3 +405,35 @@ export const validateToken = async (
     next(error);
   }
 };
+
+export const switchRole = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { role } = req.body;
+
+    const user = await prisma.user.findUnique({
+      where: {
+        id: req.user.id,
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { role },
+    });
+
+    res.status(200).json({
+      message: "Role has been switched successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
