@@ -193,3 +193,14 @@ model EventReview {
   @@unique([transactionId])
   @@map("event_reviews")
 }
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  used      Boolean  @default(false)
+
+  @@map("password_reset_tokens")
+}
