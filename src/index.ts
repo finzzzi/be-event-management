@@ -2,6 +2,7 @@ import express from "express";
 import authRoutes from "./routes/authRoutes";
 import eventRoutes from "./routes/eventRoutes";
 import transactionRoutes from "./routes/transactionRoutes";
+import userRoutes from "./routes/userRoutes";
 import cors from "cors";
 import "./schedulers/transactionScheduler";
 import "./schedulers/expiryScheduler";
@@ -18,6 +19,7 @@ app.use(express.json());
 app.use("/auth", authRoutes);
 app.use("/events", eventRoutes);
 app.use("/transactions", transactionRoutes);
+app.use("/users", userRoutes);
 
 // Start server
 app.listen(PORT, () => {
