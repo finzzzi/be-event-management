@@ -464,11 +464,15 @@ export const acceptTransaction = async (
     });
 
     // Send notification email
-    await sendTransactionEmail(
-      transaction.user.email,
-      transaction.event.name,
-      "accepted"
-    );
+    try {
+      await sendTransactionEmail(
+        transaction.user.email,
+        transaction.event.name,
+        "accepted"
+      );
+    } catch (emailError) {
+      console.error("Email sending failed:", emailError);
+    }
 
     res.json({
       message: "Transaction accepted",

@@ -10,6 +10,7 @@ import {
   getAllEvents,
   getDetailEventById,
   getAllCategory,
+  getEventAttendees,
 } from "../controllers/eventController";
 
 const router = Router();
@@ -25,6 +26,7 @@ router.use(authenticate, verifyOrganizer);
 router.post("/", createEvent);
 router.get("/", getEventsByOrganizer);
 router.get("/:id", getEventById);
+router.get("/:id/attendees", getEventAttendees);
 router.put("/:id", updateEvent);
 router.delete("/:id", deleteEvent);
 

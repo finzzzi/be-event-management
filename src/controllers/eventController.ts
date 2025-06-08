@@ -175,6 +175,62 @@ export const deleteEvent = async (
   }
 };
 
+export const getEventAttendees = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const eventId = parseInt(req.params.id);
+    const userId = req.user?.id;
+
+    // Verify event belongs to user
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+    });
+
+    if (!event || event.userId !== userId) {
+      res.status(403).json({ error: "Unauthorized for this event" });
+      return;
+    }
+
+    // Get attendees (successful transactions)
+    const attendees = await prisma.transaction.findMany({
+      where: {
+        eventId,
+        transactionStatusId: 3, // Accepted status
+      },
+      select: {
+        id: true,
+        quantity: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    // Transform to match frontend structure
+    const result = attendees.map((tx) => ({
+      id: tx.id,
+      user: tx.user,
+      quantity: tx.quantity,
+      transactionDate: tx.createdAt.toISOString(),
+    }));
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 // endpoint untuk sisi customer
 export const getAllEvents = async (
   req: Request,
