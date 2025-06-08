@@ -10,6 +10,8 @@ import {
   getAllEvents,
   getDetailEventById,
   getAllCategory,
+  getEventAttendees,
+  getEventReports,
   getEventsWithPagination,
 } from "../controllers/eventController";
 
@@ -26,7 +28,9 @@ router.use(authenticate, verifyOrganizer);
 
 router.post("/", createEvent);
 router.get("/", getEventsByOrganizer);
+router.get("/reports", getEventReports);
 router.get("/:id", getEventById);
+router.get("/:id/attendees", getEventAttendees);
 router.put("/:id", updateEvent);
 router.delete("/:id", deleteEvent);
 

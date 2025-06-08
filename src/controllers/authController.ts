@@ -142,7 +142,12 @@ export const register = async (
       expiresIn: "1h",
     });
 
-    res.status(201).json({ token });
+    const { password: _, ...userWithoutPassword } = user;
+
+    res.status(201).json({
+      token,
+      user: userWithoutPassword,
+    });
   } catch (error) {
     next(error);
   }
@@ -175,7 +180,13 @@ export const login = async (
       expiresIn: "1h",
     });
 
-    res.json({ token });
+    // Return user data and token without password
+    const { password: _, ...userWithoutPassword } = user;
+
+    res.json({
+      token,
+      user: userWithoutPassword,
+    });
   } catch (error) {
     next(error);
   }
