@@ -12,12 +12,14 @@ import {
   getAllCategory,
   getEventAttendees,
   getEventReports,
+  getEventsWithPagination,
 } from "../controllers/eventController";
 
 const router = Router();
 
 //endpoint sisi customer
 router.get("/all", getAllEvents);
+router.get("/all-with-pagination", getEventsWithPagination);
 router.get("/detail/:id", getDetailEventById);
 router.get("/categories", getAllCategory);
 

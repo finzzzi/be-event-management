@@ -12,6 +12,8 @@ import {
   getPaymentProof,
   acceptTransaction,
   rejectTransaction,
+  createReview,
+  getReviewsByTransactionId,
 } from "../controllers/transactionController";
 import { verifyOrganizer } from "../middlewares/verifyOrganizer";
 
@@ -24,6 +26,8 @@ router.use(authenticate);
 router.get("/user", getUserTransactions);
 
 router.post("/", createTransaction);
+router.post("/review", createReview);
+router.get("/review", getReviewsByTransactionId);
 
 // upload payment proof
 router.patch(

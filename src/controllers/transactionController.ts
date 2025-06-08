@@ -43,6 +43,7 @@ const getOrderedUserPoints = async (userId: number) => {
   const userPointsWithExpiry = await prisma.point.findMany({
     where: {
       userId,
+      point: { gt: 0 }, // Only fetch positive points
       expiredAt: { gt: new Date() },
       deletedAt: null,
     },
@@ -52,6 +53,7 @@ const getOrderedUserPoints = async (userId: number) => {
   const userPointsNoExpiry = await prisma.point.findMany({
     where: {
       userId,
+      point: { gt: 0 }, // Only fetch positive points
       expiredAt: null,
       deletedAt: null,
     },
@@ -178,8 +180,9 @@ export const createTransaction = async (
           totalDiscount,
           totalPrice: finalPrice,
           transactionStatusId: 1,
-          couponId: use_coupon && userCoupon ? userCoupon.id : null,
-          voucherId: use_voucher && event.vouchers ? event.vouchers.id : null,
+          usedCouponId: use_coupon && userCoupon ? userCoupon.id : null,
+          usedVoucherId:
+            use_voucher && event.vouchers ? event.vouchers.id : null,
         },
         include: {
           event: {
@@ -200,27 +203,57 @@ export const createTransaction = async (
 
       // deduct points if used
       if (use_points && points_amount > 0) {
-        const userPoints = await getOrderedUserPoints(userId);
+        const userAvailablePositivePoints = await getOrderedUserPoints(userId);
 
         let remainingPointsToDeduct = points_amount;
-        for (const pointRecord of userPoints) {
+        for (const pointRecord of userAvailablePositivePoints) {
           if (remainingPointsToDeduct <= 0) break;
 
-          if (pointRecord.point <= remainingPointsToDeduct) {
-            // delete this point record completely
-            await prisma.point.update({
-              where: { id: pointRecord.id },
-              data: { deletedAt: new Date() },
-            });
-            remainingPointsToDeduct -= pointRecord.point;
-          } else {
-            // reduce points in this record
-            await prisma.point.update({
-              where: { id: pointRecord.id },
-              data: { point: pointRecord.point - remainingPointsToDeduct },
-            });
-            remainingPointsToDeduct = 0;
+          // calculate how much of this specific pointRecord has already been used
+          const sumOfPreviousUsages = await prisma.point.aggregate({
+            where: {
+              originalPointId: pointRecord.id, // link to the specific source record
+              point: { lt: 0 },
+              deletedAt: null,
+            },
+            _sum: {
+              point: true,
+            },
+          });
+          // access _sum.point, defaulting to 0 if null/undefined
+          const totalUsedFromThisRecord = Math.abs(
+            sumOfPreviousUsages._sum?.point || 0
+          );
+          const currentBalanceOfThisRecord =
+            pointRecord.point - totalUsedFromThisRecord;
+
+          if (currentBalanceOfThisRecord <= 0) {
+            continue; // this source point record is already fully depleted
           }
+
+          const pointsToDeductFromThisRecord = Math.min(
+            currentBalanceOfThisRecord,
+            remainingPointsToDeduct
+          );
+
+          if (pointsToDeductFromThisRecord > 0) {
+            await prisma.point.create({
+              data: {
+                userId,
+                point: -pointsToDeductFromThisRecord,
+                transactionId: transaction.id,
+                originalPointId: pointRecord.id,
+                expiredAt: null,
+              },
+            });
+            remainingPointsToDeduct -= pointsToDeductFromThisRecord;
+          }
+        }
+
+        if (remainingPointsToDeduct > 0) {
+          throw new Error(
+            `Failed to deduct the full points_amount. Remaining points to deduct: ${remainingPointsToDeduct}.`
+          );
         }
       }
 
@@ -568,6 +601,115 @@ export const rejectTransaction = async (
     );
 
     res.json({ message: "Transaction rejected and resources restored" });
+    
+export const createReview = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { eventId, rating, comment, transactionId } = req.body;
+    const userId = (req as any).user.id;
+
+    if (!transactionId) {
+      res.status(400).json({ message: "Transaction ID is required" });
+      return;
+    }
+
+    // check if event exists
+    const event = await prisma.event.findUnique({
+      where: { id: parseInt(eventId) },
+    });
+
+    if (!event) {
+      res.status(404).json({ message: "Event not found" });
+      return;
+    }
+
+    // check if the event has passed
+    if (event.endDate >= new Date()) {
+      res
+        .status(400)
+        .json({ message: "You can only review events that have passed" });
+      return;
+    }
+
+    // fetch and validate the specific transaction
+    const transactionToReview = await prisma.transaction.findUnique({
+      where: { id: parseInt(transactionId) },
+    });
+
+    if (!transactionToReview) {
+      res.status(404).json({ message: "Transaction not found" });
+      return;
+    }
+
+    if (transactionToReview.userId !== userId) {
+      res
+        .status(403)
+        .json({ message: "This transaction does not belong to you" });
+      return;
+    }
+
+    if (transactionToReview.eventId !== parseInt(eventId)) {
+      res.status(400).json({
+        message: "This transaction does not match the provided event",
+      });
+      return;
+    }
+
+    if (transactionToReview.transactionStatusId !== 3) {
+      res
+        .status(403)
+        .json({ message: "You can only review completed transactions" });
+      return;
+    }
+
+    // check if this specific transaction has already been reviewed
+    const existingReview = await prisma.eventReview.findUnique({
+      where: { transactionId: parseInt(transactionId) },
+    });
+
+    if (existingReview) {
+      res
+        .status(400)
+        .json({ message: "This transaction has already been reviewed" });
+      return;
+    }
+
+    // create review
+    const review = await prisma.eventReview.create({
+      data: {
+        eventId: parseInt(eventId),
+        userId,
+        rating,
+        comment,
+        transactionId: parseInt(transactionId),
+      },
+    });
+
+    res
+      .status(201)
+      .json({ message: "Review created successfully", data: review });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getReviewsByTransactionId = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const transactionId = req.query.transactionId as string;
+    const reviews = await prisma.eventReview.findUnique({
+      where: { transactionId: parseInt(transactionId) },
+    });
+
+    res
+      .status(200)
+      .json({ message: "Reviews retrieved successfully", data: reviews });
   } catch (error) {
     next(error);
   }

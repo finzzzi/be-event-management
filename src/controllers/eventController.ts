@@ -542,3 +542,114 @@ export const getAllCategory = async (
     next(error);
   }
 };
+
+export const getEventsWithPagination = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 6;
+  const categories = req.query.categories as string | undefined;
+
+  // menghitung offset berdasarkan page
+  const offset = (page - 1) * limit;
+
+  // parse categories untuk multiple filter
+  let categoryNames: string[] = [];
+  if (categories) {
+    categoryNames = categories.split(",").map((cat) => cat.trim());
+  }
+
+  try {
+    const events = await prisma.event.findMany({
+      where: {
+        startDate: {
+          gte: new Date(),
+        },
+        ...(categoryNames.length > 0
+          ? {
+              category: {
+                name: {
+                  in: categoryNames,
+                },
+              },
+            }
+          : {}),
+      },
+      include: {
+        category: {
+          select: {
+            name: true,
+          },
+        },
+        organizer: {
+          select: {
+            name: true,
+          },
+        },
+        vouchers: {
+          where: {
+            startDate: {
+              lte: new Date(),
+            },
+            endDate: {
+              gte: new Date(),
+            },
+            quota: {
+              gt: 0,
+            },
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            name: true,
+            nominal: true,
+            quota: true,
+            startDate: true,
+            endDate: true,
+          },
+        },
+      },
+      orderBy: {
+        startDate: "asc",
+      },
+      skip: offset,
+      take: limit,
+    });
+
+    // mendapatkan total count untuk pagination info
+    const totalEvents = await prisma.event.count({
+      where: {
+        startDate: {
+          gte: new Date(),
+        },
+        ...(categoryNames.length > 0
+          ? {
+              category: {
+                name: {
+                  in: categoryNames,
+                },
+              },
+            }
+          : {}),
+      },
+    });
+
+    const totalPages = Math.ceil(totalEvents / limit);
+
+    res.status(200).json({
+      data: events,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalEvents,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
