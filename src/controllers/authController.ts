@@ -142,7 +142,7 @@ export const register = async (
       expiresIn: "1h",
     });
 
-    const { password: _, ...userWithoutPassword } = user;
+    const { password: _, ...userWithoutPassword } = result;
 
     res.status(201).json({
       token,

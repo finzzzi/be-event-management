@@ -601,7 +601,11 @@ export const rejectTransaction = async (
     );
 
     res.json({ message: "Transaction rejected and resources restored" });
-    
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const createReview = async (
   req: Request,
   res: Response,
